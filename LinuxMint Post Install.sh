@@ -42,14 +42,21 @@ if ! dpkg -s code >/dev/null 2>&1; then
 fi
 
 # WineHQ
-if ! grep -rq "dl.winehq.org/wine-builds" /etc/apt/sources.list.d/ 2>/dev/null; then
-  say "Adding WineHQ repo..."
-  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-  # winehq.key is ASCII-armored; apt needs a dearmored binary keyring for signed-by
-  curl -sL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
-    | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
-fi
+# Self-cleaning: if a prior/partial run left any wine repo or key behind, remove
+# it and re-add cleanly. The idempotency guard re-runs this block whenever the
+# repo or key is missing or stale, so a previous run's bad key can't persist.
+#
+# Step A: drop any existing wine source + key so we always start clean.
+sudo rm -f /etc/apt/sources.list.d/winehq.list /etc/apt/keyrings/winehq.gpg 2>/dev/null
+sudo apt-get --allow-releaseinfo-change update 2>/dev/null || sudo apt update -y
+#
+# Step B: (re)add the WineHQ repo with a freshly dearmored key.
+sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+# winehq.key is ASCII-armored; apt needs a dearmored binary keyring for signed-by
+curl -sL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
+  | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
+say "WineHQ repo removed stale state and re-added cleanly."
 
 # abraunegg OneDrive client (official OpenSuSE Build Service repo)
 # NOTE: the old launchpad PPA (ppa:abraunegg/onedrive) no longer exists - the
