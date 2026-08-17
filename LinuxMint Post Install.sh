@@ -42,21 +42,43 @@ if ! dpkg -s code >/dev/null 2>&1; then
 fi
 
 # WineHQ
-# Self-cleaning: if a prior/partial run left any wine repo or key behind, remove
-# it and re-add cleanly. The idempotency guard re-runs this block whenever the
-# repo or key is missing or stale, so a previous run's bad key can't persist.
+# Self-cleaning: a prior or partial run may have left wine repo entries or keys
+# under several different paths. Remove ALL known variants so no stale key can
+# survive, then (re)add freshly.
 #
-# Step A: drop any existing wine source + key so we always start clean.
-sudo rm -f /etc/apt/sources.list.d/winehq.list /etc/apt/keyrings/winehq.gpg 2>/dev/null
+# Step A: drop every known wine source + key path.
+sudo rm -f \
+  /etc/apt/sources.list.d/winehq.list \
+  /etc/apt/sources.list.d/winehq-*.list \
+  /etc/apt/sources.list.d/winehq-*.sources \
+  /etc/apt/keyrings/winehq.gpg \
+  /usr/share/keyrings/winehq-archive.gpg \
+  /usr/share/keyrings/winehq-archive.key \
+  /etc/apt/trusted.gpg.d/winehq.gpg \
+  /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
+# Drop the old WineHQ key from the legacy trusted keyring if a manual install put it there.
+if command -v apt-key >/dev/null 2>&1; then
+  sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
+fi
+sudo apt-get clean
+sudo rm -rf /var/lib/apt/lists/*
 sudo apt-get --allow-releaseinfo-change update 2>/dev/null || sudo apt update -y
 #
 # Step B: (re)add the WineHQ repo with a freshly dearmored key.
 sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
 # winehq.key is ASCII-armored; apt needs a dearmored binary keyring for signed-by
-curl -sL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+# (wget ships by default on Mint; curl may not be present yet at this step)
+wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
+  | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+# Guard: if the key didn't actually download, the keyring will be empty and apt
+# will complain - fail loudly rather than shipping a broken repo.
+if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/winehq.gpg --list-keys >/dev/null 2>&1; then
+  echo "ERROR: WineHQ key download failed / produced no key. Check network, then re-run."
+  exit 1
+fi
 echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
   | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
-say "WineHQ repo removed stale state and re-added cleanly."
+say "WineHQ: cleared all stale wine state and re-added cleanly."
 
 # abraunegg OneDrive client (official OpenSuSE Build Service repo)
 # NOTE: the old launchpad PPA (ppa:abraunegg/onedrive) no longer exists - the
