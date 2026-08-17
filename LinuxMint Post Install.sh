@@ -302,11 +302,14 @@ gsettings set org.cinnamon.desktop.background picture-uri "file://$HOME/.local/s
 gsettings set org.cinnamon.desktop.background picture-options 'scaled'
 
 # 8f. Startup / logoff sounds
-cp -f "$ASSET_DIR/xp-startup.wav" "$HOME/.local/share/sounds/xp-startup.wav"
-cp -f "$ASSET_DIR/xp-shutdown.wav" "$HOME/.local/share/sounds/xp-shutdown.wav"
+# Cinnamon expects these in the system-wide dir (they show as "not found" if
+# they only live under ~/.local). Copy into /usr/share/sounds and reference them.
+sudo mkdir -p /usr/share/sounds
+sudo cp -f "$ASSET_DIR/xp-startup.wav" /usr/share/sounds/xp-startup.wav
+sudo cp -f "$ASSET_DIR/xp-shutdown.wav" /usr/share/sounds/xp-shutdown.wav
 gsettings set org.cinnamon.sounds login-enabled true
-gsettings set org.cinnamon.sounds login-file "file://$HOME/.local/share/sounds/xp-startup.wav"
+gsettings set org.cinnamon.sounds login-file "file:///usr/share/sounds/xp-startup.wav"
 gsettings set org.cinnamon.sounds logout-enabled true
-gsettings set org.cinnamon.sounds logout-file "file://$HOME/.local/share/sounds/xp-shutdown.wav"
+gsettings set org.cinnamon.sounds logout-file "file:///usr/share/sounds/xp-shutdown.wav"
 
 say "Desktop customizations applied. Re-login plays the XP startup/shutdown sounds."
