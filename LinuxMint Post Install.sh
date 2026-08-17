@@ -16,6 +16,39 @@ bold=$'\e[1m'; green=$'\e[32m'; yellow=$'\e[33m'; reset=$'\e[0m'
 say()  { printf "${bold}${green}[setup]${reset} %s\n" "$*"; }
 warn() { printf "${bold}${yellow}[warn]${reset} %s\n" "$*"; }
 
+# ---- --fix-wine: just clean up the WineHQ repo/key, then exit -----------------
+# Useful when `apt update` reports NO_PUBKEY / "public key is not available" for winehq.
+if [[ "${1:-}" == "--fix-wine" ]]; then
+  say "Fixing WineHQ: removing all stale Wine repo + key state, then re-adding."
+  sudo rm -f \
+    /etc/apt/sources.list.d/winehq.list \
+    /etc/apt/sources.list.d/winehq-*.list \
+    /etc/apt/sources.list.d/winehq-*.sources \
+    /etc/apt/keyrings/winehq.gpg \
+    /usr/share/keyrings/winehq-archive.gpg \
+    /usr/share/keyrings/winehq-archive.key \
+    /etc/apt/trusted.gpg.d/winehq.gpg \
+    /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
+  if command -v apt-key >/dev/null 2>&1; then
+    sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
+  fi
+  sudo apt-get clean
+  sudo rm -rf /var/lib/apt/lists/*
+  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+  wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
+    | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+  if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/winehq.gpg --list-keys >/dev/null 2>&1; then
+    echo "ERROR: WineHQ key failed to download. Check network and retry."
+    exit 1
+  fi
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
+    | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
+  echo "WineHQ repo cleaned and re-added. Running apt update..."
+  sudo apt-get --allow-releaseinfo-change update
+  echo "Done. WineHQ should be fixed now."
+  exit 0
+fi
+
 # ------------------------------------------------------------------------------
 say "Step 0: Update package lists & upgrade"
 sudo apt update -y
