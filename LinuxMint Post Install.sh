@@ -34,8 +34,9 @@ fi
 # VS Code
 if ! dpkg -s code >/dev/null 2>&1; then
   say "Adding VS Code..."
-  wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg 2>/dev/null || \
-  wget -qO- https://packages.microsoft.com/keys/msopentech.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
+  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+  wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg 2>/dev/null || \
+  wget -qO- https://packages.microsoft.com/keys/msopentech.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
   echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main" \
     | sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
 fi
