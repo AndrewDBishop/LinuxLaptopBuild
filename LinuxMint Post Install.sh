@@ -45,7 +45,8 @@ fi
 if ! grep -rq "dl.winehq.org/wine-builds" /etc/apt/sources.list.d/ 2>/dev/null; then
   say "Adding WineHQ repo..."
   sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-  sudo wget -q -O /etc/apt/keyrings/winehq.gpg https://dl.winehq.org/wine-builds/winehq.key
+  # winehq.key is ASCII-armored; apt needs a dearmored binary keyring for signed-by
+  curl -sL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
   echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
     | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
 fi
