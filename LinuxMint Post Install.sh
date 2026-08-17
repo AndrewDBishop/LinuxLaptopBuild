@@ -50,10 +50,15 @@ if ! grep -rq "dl.winehq.org/wine-builds" /etc/apt/sources.list.d/ 2>/dev/null; 
     | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
 fi
 
-# abraunegg OneDrive client (PPA)
+# abraunegg OneDrive client (official OpenSuSE Build Service repo)
+# NOTE: the old launchpad PPA (ppa:abraunegg/onedrive) no longer exists - the
+# client is now published via the OBS repo below.
 if ! dpkg -s onedrive >/dev/null 2>&1; then
-  say "Adding OneDrive PPA..."
-  sudo add-apt-repository -y ppa:abraunegg/onedrive
+  say "Adding OneDrive OBS repository..."
+  wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_24.04/Release.key \
+    | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg >/dev/null
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_24.04/ ./" \
+    | sudo tee /etc/apt/sources.list.d/onedrive.list >/dev/null
 fi
 
 sudo apt update -y
@@ -61,14 +66,14 @@ sudo apt update -y
 # ---- 2. Bulk apt install -----------------------------------------------------
 say "Step 2: Installing repository packages"
 # NOTE on updating:
-#  - Onedrive *client* (ppa:abraunegg/onedrive) & Dropbox (official repo) stay
-#    current via plain 'sudo apt update && sudo apt upgrade'.
+#  - Onedrive *client* (adds the official OpenSUSE Build Service repo) & Dropbox
+#    (official repo) stay current via plain 'sudo apt update && sudo apt upgrade'.
 #  - OneDriveGUI (the AppImage wrapper) is versioned separately - update by
 #    grabbing a new AppImage from https://github.com/bpozdena/OneDriveGUI/releases when new.
 APT_CORE="git mc nano micro tmux btop bat ripgrep jq direnv net-tools ipcalc"
 APT_CORE+=" fortune-mod lolcat cowsay arj rclone duf fastfetch eza"
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
-APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64"
+APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive"
 # Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
 APT_CORE+=" mint-x-icons mint-x-icons-legacy mint-x-icons-cursors mint-y-icons mint-themes"
 
