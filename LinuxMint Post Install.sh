@@ -68,6 +68,8 @@ APT_CORE="git mc nano micro tmux btop bat ripgrep jq direnv net-tools ipcalc"
 APT_CORE+=" fortune-mod lolcat cowsay arj rclone duf fastfetch eza"
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
 APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64"
+# Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
+APT_CORE+=" mint-x-icons mint-x-icons-legacy mint-x-icons-cursors mint-y-icons mint-themes"
 
 # zenmap/nmap intentionally excluded per request.
 sudo apt install -y $APT_CORE || warn "Some repo packages failed - verify names for your Mint version"
@@ -165,3 +167,54 @@ EOF
 
 say "All done. The MyBash setup is up to you:"
 say "    cd '${MYBASH_DIR}' && ./setup.sh"
+
+# ---- 8. Desktop customization ------------------------------------------------
+# Applies the Mint-XP desktop, Mint-X-Yellow icons, Mint-Y-Dark-Teal apps,
+# and sets wallpaper + startup/logoff sounds. Media files live next to this
+# script wherever you pulled the repo from - safe to re-run.
+say "Step 8: Applying desktop theme, wallpaper & sounds"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ASSET_DIR="${ASSET_DIR:-$SCRIPT_DIR}"
+
+mkdir -p "$HOME/.local/share/themes" "$HOME/.local/share/sounds" \
+         "$HOME/.local/share/backgrounds"
+
+# 8a. Mint-XP desktop theme (Cinnamon spice) - download only if missing
+if [[ ! -d "$HOME/.local/share/themes/Mint-XP/cinnamon" ]]; then
+  say "Downloading Mint-XP desktop theme..."
+  curl -sSL -o /tmp/mintxp.zip "https://cinnamon-spices.linuxmint.com/files/themes/Mint-XP.zip"
+  python3 -c "import zipfile,sys; zipfile.ZipFile('/tmp/mintxp.zip').extractall('$HOME/.local/share/themes')" \
+    || unzip -q /tmp/mintxp.zip -d "$HOME/.local/share/themes" 2>/dev/null \
+    || sudo apt install -y unzip   # fallback: ensure unzip present
+  rm -f /tmp/mintxp.zip
+fi
+
+# 8b. Mint-XP desktop theme
+# Desktop / Window borders / Controls are driven by org.cinnamon.theme.
+gsettings set org.cinnamon.theme name 'Mint-XP'
+
+# 8c. Icon theme (Mint-X-Yellow)
+gsettings set org.cinnamon.desktop.interface icon-theme 'Mint-X-Yellow'
+
+# 8d. Application (Controls / GTK) theme
+# Mint-Y-Dark-Teal drives the GTK widgets for app windows. This lives in the
+# interface schema independently of the desktop theme (org.cinnamon.theme), so
+# we can have Mint-XP desktop + Mint-Y-Dark-Teal apps at the same time.
+gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark-Teal'
+
+# 8e. Wallpaper (bliss.jpg)
+# Assets are expected next to the script (in the cloned repo dir).
+cp -f "$ASSET_DIR/bliss.jpg" "$HOME/.local/share/backgrounds/bliss.jpg"
+gsettings set org.cinnamon.desktop.background picture-uri "file://$HOME/.local/share/backgrounds/bliss.jpg"
+gsettings set org.cinnamon.desktop.background picture-options 'scaled'
+
+# 8f. Startup / logoff sounds
+cp -f "$ASSET_DIR/xp-startup.wav" "$HOME/.local/share/sounds/xp-startup.wav"
+cp -f "$ASSET_DIR/xp-shutdown.wav" "$HOME/.local/share/sounds/xp-shutdown.wav"
+gsettings set org.cinnamon.sounds login-enabled true
+gsettings set org.cinnamon.sounds login-file "file://$HOME/.local/share/sounds/xp-startup.wav"
+gsettings set org.cinnamon.sounds logout-enabled true
+gsettings set org.cinnamon.sounds logout-file "file://$HOME/.local/share/sounds/xp-shutdown.wav"
+
+say "Desktop customizations applied. Re-login plays the XP startup/shutdown sounds."
