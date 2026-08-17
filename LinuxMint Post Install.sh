@@ -76,6 +76,14 @@ if ! dpkg -s code >/dev/null 2>&1; then
   sudo apt install -y code
 fi
 
+# Microsoft Core Fonts (installed before WineHQ; accepts EULA non-interactively)
+if ! dpkg -s ttf-mscorefonts-installer >/dev/null 2>&1; then
+  say "Installing Microsoft Core Fonts..."
+  echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
+    | sudo debconf-set-selections
+  sudo DEBIAN_FRONTEND=noninteractive apt install -y ttf-mscorefonts-installer || warn "Could not install ttf-mscorefonts-installer"
+fi
+
 # WineHQ
 # Self-cleaning: a prior or partial run may have left wine repo entries or keys
 # under several different paths. Remove ALL known variants so no stale key can
@@ -146,6 +154,16 @@ APT_CORE+=" mint-x-icons mint-y-icons mint-y-icons-legacy mint-cursor-themes min
 
 # zenmap/nmap intentionally excluded per request.
 sudo apt install -y $APT_CORE || warn "Some repo packages failed - verify names for your Mint version"
+
+# Wine (winehq-stable) & Winetricks
+if ! dpkg -s winehq-stable >/dev/null 2>&1; then
+  say "Installing WineHQ Stable..."
+  sudo apt install -y --install-recommends winehq-stable || sudo apt install -y winehq-stable || warn "Wine installation failed"
+fi
+if ! dpkg -s winetricks >/dev/null 2>&1; then
+  say "Installing Winetricks..."
+  sudo apt install -y winetricks || warn "Winetricks installation failed"
+fi
 
 # fastfetch isn't in the Ubuntu 24.04 (noble) repos, so install from its endorsed
 # PPA (maintained by the fastfetch author, supports noble/22.x).
