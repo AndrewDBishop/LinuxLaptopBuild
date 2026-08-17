@@ -143,13 +143,25 @@ rm -rf "$tmp"
 update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
 
 # ---- 7. MyBash from GitHub --------------------------------------------------
+# We just clone the repo here - no auto-hooking into .bashrc. You finish the
+# setup manually so you can review what it does (instructions printed below).
 say "Cloning MyBash..."
 if [[ ! -d "$MYBASH_DIR/.git" ]]; then
   git clone "$MYBASH_REPO" "$MYBASH_DIR" || warn "Could not clone MyBash - check MYBASH_REPO"
 fi
-if [[ -d "$MYBASH_DIR/.git" ]] && ! grep -q 'mybash' "$HOME/.bashrc" 2>/dev/null; then
-  printf '\n# MyBash\nexport PATH="$HOME/.local/bin:$PATH"\nsource "%s/init.sh"\n' "$MYBASH_DIR" >> "$HOME/.bashrc"
-  say "MyBash hooked into .bashrc"
-fi
+cat << EOF
 
-say "Done. Open a new terminal or 'source ~/.bashrc'"
+------------------------------------------------------------
+MyBash cloned to: ${MYBASH_DIR}
+
+To finish setting it up, continue manually:
+
+    cd ${MYBASH_DIR}
+    ./setup.sh
+
+Then open a new terminal to pick up your new shell environment.
+------------------------------------------------------------
+EOF
+
+say "All done. The MyBash setup is up to you:"
+say "    cd '${MYBASH_DIR}' && ./setup.sh"
