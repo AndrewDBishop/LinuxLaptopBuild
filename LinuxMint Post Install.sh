@@ -134,14 +134,25 @@ say "Step 2: Installing repository packages"
 #  - OneDriveGUI (the AppImage wrapper) is versioned separately - update by
 #    grabbing a new AppImage from https://github.com/bpozdena/OneDriveGUI/releases when new.
 APT_CORE="git mc nano micro tmux btop bat ripgrep jq direnv net-tools ipcalc"
-APT_CORE+=" fortune-mod lolcat cowsay arj rclone duf fastfetch eza"
+APT_CORE+=" fortune-mod lolcat cowsay arj rclone eza"
+# fastfetch is NOT in the Ubuntu 24.04 (noble) repos that Mint 22.x uses, so it's
+# installed separately via its official PPA further down (not via this apt list).
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
 APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive"
 # Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
-APT_CORE+=" mint-x-icons mint-x-icons-legacy mint-x-icons-cursors mint-y-icons mint-themes"
+APT_CORE+=" mint-x-icons mint-y-icons mint-y-icons-legacy mint-cursor-themes mint-themes"
 
 # zenmap/nmap intentionally excluded per request.
 sudo apt install -y $APT_CORE || warn "Some repo packages failed - verify names for your Mint version"
+
+# fastfetch isn't in the Ubuntu 24.04 (noble) repos, so install from its endorsed
+# PPA (maintained by the fastfetch author, supports noble/22.x).
+if ! command -v fastfetch >/dev/null 2>&1; then
+  say "Installing fastfetch from its PPA (not in noble repos)..."
+  sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch
+  sudo apt update -y
+  sudo apt install -y fastfetch
+fi
 
 # ---- 3. AppImage helper ------------------------------------------------------
 install_appimage() {
@@ -177,14 +188,26 @@ install_appimage "https://github.com/bpozdena/OneDriveGUI/releases/latest/downlo
 say "Installing Dropbox..."
 # Add the official Dropbox apt repository (linux.dropbox.com) so it updates
 # along with everything else on 'sudo apt upgrade' - no flatpak needed.
-if ! grep -rq "linux.dropbox.com" /etc/apt/sources.list.d/ 2>/dev/null; then
+# NOTE: the old key URL (linux.dropbox.com/facts/keyring.gpg) returns 404 / "File
+# Not Found" now - fetch the Dropbox repo signing key from Ubuntu's keyserver
+# instead. Its fingerprint is 1C61A2656FB57B7E4DE0F4C1FC918B335044912E.
+fetch_dropbox_key() {
   sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-  wget -qO- https://linux.dropbox.com/facts/keyring.gpg | sudo gpg --dearmor \
-    -o /etc/apt/keyrings/dropbox.gpg
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/dropbox.gpg] https://linux.dropbox.com/ubuntu noble main" \
-    | sudo tee /etc/apt/sources.list.d/dropbox.list >/dev/null
-  sudo apt update -y
-fi
+  # Always re-fetch (don't trust a possibly-stale file from a prior run).
+  curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC918B335044912E" \
+    | sudo gpg --dearmor -o /etc/apt/keyrings/dropbox.gpg
+  # Guard: ensure the key actually downloaded
+  if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/dropbox.gpg --list-keys >/dev/null 2>&1; then
+    echo "ERROR: Dropbox key failed to download. Check network and re-run."
+    exit 1
+  fi
+}
+# Self-cleaning so a stale/broken key or repo entry from a prior run can't survive.
+sudo rm -f /etc/apt/sources.list.d/dropbox.list 2>/dev/null
+fetch_dropbox_key
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/dropbox.gpg] https://linux.dropbox.com/ubuntu noble main" \
+  | sudo tee /etc/apt/sources.list.d/dropbox.list >/dev/null
+sudo apt update -y
 if ! dpkg -s dropbox >/dev/null 2>&1; then
   sudo apt install -y dropbox
 fi
