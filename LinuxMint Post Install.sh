@@ -150,10 +150,15 @@ APT_CORE+=" fortune-mod lolcat cowsay arj rclone eza"
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
 APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive"
 # Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
-APT_CORE+=" mint-x-icons mint-y-icons mint-y-icons-legacy mint-cursor-themes mint-themes"
+# Note: Mint 22.x replaces mint-y-icons-legacy with mint-l-icons
+APT_CORE+=" mint-x-icons mint-y-icons mint-l-icons mint-cursor-themes mint-themes"
 
-# zenmap/nmap intentionally excluded per request.
-sudo apt install -y $APT_CORE || warn "Some repo packages failed - verify names for your Mint version"
+# Install all packages in a loop so a single missing/renamed package won't fail the rest
+for pkg in $APT_CORE; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    sudo apt install -y "$pkg" || warn "Package '$pkg' failed to install - verify name for your Mint version"
+  fi
+done
 
 # Wine (winehq-stable) & Winetricks
 if ! dpkg -s winehq-stable >/dev/null 2>&1; then
