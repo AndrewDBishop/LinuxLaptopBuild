@@ -149,6 +149,8 @@ APT_CORE+=" fortune-mod lolcat cowsay arj rclone eza"
 # installed separately via its official PPA further down (not via this apt list).
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
 APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive"
+# SDL2 runtime for Mystic Netrunner ANSI BBS client
+APT_CORE+=" libsdl2-2.0-0 libsdl2-dev"
 # Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
 # Note: Mint 22.x replaces mint-y-icons-legacy with mint-l-icons
 APT_CORE+=" mint-x-icons mint-y-icons mint-l-icons mint-cursor-themes mint-themes"
@@ -243,6 +245,10 @@ wget -qO- https://raw.githubusercontent.com/laurent22/joplin/dev/Joplin_install_
 
 # ---- 6. NetRunner ANSI BBS client (mysticbbs) -------------------------------
 say "Installing NetRunner..."
+# Ensure SDL2 runtime is installed (required for NetRunner's ANSI graphical/video engine)
+if ! dpkg -s libsdl2-2.0-0 >/dev/null 2>&1 && ! dpkg -s libsdl2-dev >/dev/null 2>&1; then
+  sudo apt install -y libsdl2-2.0-0 || sudo apt install -y libsdl2-dev || warn "Could not install SDL2 libraries for NetRunner"
+fi
 NETRUNNER_URL="https://mysticbbs.com/downloads/nr21_l64.zip"
 tmp="$(mktemp -d)"
 wget -q "$NETRUNNER_URL" -O "$tmp/nr.zip"
@@ -255,7 +261,7 @@ Name=NetRunner
 Comment=ANSI BBS telnet/SSH client (mysticbbs)
 Exec=/usr/local/bin/netrunner
 Type=Application
-Terminal=true
+Terminal=false
 Categories=Network;
 EOF
 rm -rf "$tmp"
