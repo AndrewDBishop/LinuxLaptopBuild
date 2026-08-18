@@ -148,7 +148,7 @@ APT_CORE+=" fortune-mod lolcat cowsay arj rclone eza"
 # fastfetch is NOT in the Ubuntu 24.04 (noble) repos that Mint 22.x uses, so it's
 # installed separately via its official PPA further down (not via this apt list).
 APT_CORE+=" p7zip p7zip-full filezilla remmina terminator unzip wget curl"
-APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive"
+APT_CORE+=" ca-certificates gnupg lsb-release libfuse2t64 onedrive libnss3-tools"
 # SDL2 runtime for Mystic Netrunner ANSI BBS client
 APT_CORE+=" libsdl2-2.0-0 libsdl2-dev"
 # Icon + theme packs (Mint-X-Yellow icons, Mint-Y-Dark-Teal apps, etc.)
@@ -344,3 +344,39 @@ gsettings set org.cinnamon.sounds logout-enabled true
 gsettings set org.cinnamon.sounds logout-file "file:///usr/share/sounds/xp-shutdown.wav"
 
 say "Desktop customizations applied. Re-login plays the XP startup/shutdown sounds."
+
+# ---- 9. Utopia Homelab Root CA (System + Google Chrome) ----------------------
+say "Step 9: Installing Utopia Homelab Root CA (ca.utopia.lan)..."
+CA_HOST="ca.utopia.lan"
+CA_CERT_URL="https://ca.utopia.lan/roots.pem"
+CA_TARGET="/usr/local/share/ca-certificates/utopia-root-ca.crt"
+
+# Verify host is reachable on LAN before fetching
+if ping -c 1 -W 2 "$CA_HOST" >/dev/null 2>&1; then
+  say "Fetching Root CA certificate from $CA_CERT_URL..."
+  tmp_cert="$(mktemp)"
+  if curl -skf --connect-timeout 4 "$CA_CERT_URL" -o "$tmp_cert" && [ -s "$tmp_cert" ]; then
+    sudo install -Dm644 "$tmp_cert" "$CA_TARGET"
+    sudo update-ca-certificates
+
+    # Ensure libnss3-tools is present for Chrome certificate management
+    if ! dpkg -s libnss3-tools >/dev/null 2>&1; then
+      sudo apt install -y libnss3-tools
+    fi
+
+    # Import Root CA into user NSS DB (for Google Chrome / Chromium)
+    NSS_DIR="$HOME/.pki/nssdb"
+    mkdir -p "$NSS_DIR"
+    if [ ! -f "$NSS_DIR/cert9.db" ]; then
+      certutil -d sql:"$NSS_DIR" -N --empty-password 2>/dev/null || true
+    fi
+
+    certutil -d sql:"$NSS_DIR" -A -t "C,," -n "Utopia Homelab Root CA" -i "$CA_TARGET" 2>/dev/null || true
+    say "Utopia Root CA installed and trusted system-wide and in Google Chrome."
+  else
+    warn "Failed to download CA certificate from $CA_CERT_URL"
+  fi
+  rm -f "$tmp_cert"
+else
+  warn "$CA_HOST is not reachable (offline or not on home LAN). Skipping Root CA install."
+fi
