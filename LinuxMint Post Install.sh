@@ -16,38 +16,102 @@ bold=$'\e[1m'; green=$'\e[32m'; yellow=$'\e[33m'; reset=$'\e[0m'
 say()  { printf "${bold}${green}[setup]${reset} %s\n" "$*"; }
 warn() { printf "${bold}${yellow}[warn]${reset} %s\n" "$*"; }
 
-# ---- --fix-wine: just clean up the WineHQ repo/key, then exit -----------------
-# Useful when `apt update` reports NO_PUBKEY / "public key is not available" for winehq.
-if [[ "${1:-}" == "--fix-wine" ]]; then
-  say "Fixing WineHQ: removing all stale Wine repo + key state, then re-adding."
-  sudo rm -f \
-    /etc/apt/sources.list.d/winehq.list \
-    /etc/apt/sources.list.d/winehq-*.list \
-    /etc/apt/sources.list.d/winehq-*.sources \
-    /etc/apt/keyrings/winehq.gpg \
-    /usr/share/keyrings/winehq-archive.gpg \
-    /usr/share/keyrings/winehq-archive.key \
-    /etc/apt/trusted.gpg.d/winehq.gpg \
-    /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
-  if command -v apt-key >/dev/null 2>&1; then
-    sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
-  fi
-  sudo apt-get clean
-  sudo rm -rf /var/lib/apt/lists/*
-  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-  wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
-    | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
-  if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/winehq.gpg --list-keys >/dev/null 2>&1; then
-    echo "ERROR: WineHQ key failed to download. Check network and retry."
-    exit 1
-  fi
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
-    | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
-  echo "WineHQ repo cleaned and re-added. Running apt update..."
-  sudo apt-get --allow-releaseinfo-change update
-  echo "Done. WineHQ should be fixed now."
-  exit 0
-fi
+# ---- Fix / Helper switches (run individually with e.g. --fix-wine) ---------
+case "${1:-}" in
+  --fix-wine)
+    say "Fixing WineHQ: cleaning repo/keys, enabling i386 multiarch, and updating..."
+    sudo dpkg --add-architecture i386 || true
+    sudo rm -f \
+      /etc/apt/sources.list.d/winehq.list \
+      /etc/apt/sources.list.d/winehq-*.list \
+      /etc/apt/sources.list.d/winehq-*.sources \
+      /etc/apt/keyrings/winehq.gpg \
+      /usr/share/keyrings/winehq-archive.gpg \
+      /usr/share/keyrings/winehq-archive.key \
+      /etc/apt/trusted.gpg.d/winehq.gpg \
+      /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
+    if command -v apt-key >/dev/null 2>&1; then
+      sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
+    fi
+    sudo apt-get clean
+    sudo rm -rf /var/lib/apt/lists/*
+    sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+    wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
+      | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+    echo "deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
+      | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
+    sudo apt-get --allow-releaseinfo-change update
+    say "WineHQ repo reset. Installing winehq-stable & winetricks..."
+    sudo apt install -y --install-recommends winehq-stable winetricks || sudo apt install -y winehq-stable winetricks
+    say "WineHQ fixed successfully."
+    exit 0
+    ;;
+  --fix-vscode)
+    say "Fixing VS Code: resetting repository and key..."
+    sudo rm -f /etc/apt/sources.list.d/vscode.list /usr/share/keyrings/microsoft-archive-keyring.gpg 2>/dev/null
+    sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+    wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main" \
+      | sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
+    sudo apt update -y
+    sudo apt install -y code
+    say "VS Code reinstalled / fixed."
+    exit 0
+    ;;
+  --fix-chrome)
+    say "Fixing Google Chrome..."
+    wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    sudo apt install -y /tmp/google-chrome.deb || sudo apt-get -f install -y
+    rm -f /tmp/google-chrome.deb
+    say "Google Chrome reinstalled / fixed."
+    exit 0
+    ;;
+  --fix-dropbox)
+    say "Fixing Dropbox: resetting key and repository..."
+    sudo rm -f /etc/apt/sources.list.d/dropbox.list /etc/apt/keyrings/dropbox.gpg 2>/dev/null
+    sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+    curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC918B335044912E" \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/dropbox.gpg
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/dropbox.gpg] https://linux.dropbox.com/ubuntu noble main" \
+      | sudo tee /etc/apt/sources.list.d/dropbox.list >/dev/null
+    sudo apt update -y
+    sudo apt install -y dropbox
+    say "Dropbox reinstalled / fixed."
+    exit 0
+    ;;
+  --fix-onedrive)
+    say "Fixing OneDrive OBS repository..."
+    sudo rm -f /etc/apt/sources.list.d/onedrive.list /usr/share/keyrings/obs-onedrive.gpg 2>/dev/null
+    wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_24.04/Release.key \
+      | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg >/dev/null
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_24.04/ ./" \
+      | sudo tee /etc/apt/sources.list.d/onedrive.list >/dev/null
+    sudo apt update -y
+    sudo apt install -y onedrive
+    say "OneDrive reinstalled / fixed."
+    exit 0
+    ;;
+  --fix-ca)
+    say "Fixing Utopia Root CA import..."
+    CA_CERT_URL="https://ca.utopia.lan/roots.pem"
+    CA_TARGET="/usr/local/share/ca-certificates/utopia-root-ca.crt"
+    tmp_cert="$(mktemp)"
+    if curl -skf --connect-timeout 4 "$CA_CERT_URL" -o "$tmp_cert" && [ -s "$tmp_cert" ]; then
+      sudo install -Dm644 "$tmp_cert" "$CA_TARGET"
+      sudo update-ca-certificates
+      if ! dpkg -s libnss3-tools >/dev/null 2>&1; then sudo apt install -y libnss3-tools; fi
+      NSS_DIR="$HOME/.pki/nssdb"
+      mkdir -p "$NSS_DIR"
+      if [ ! -f "$NSS_DIR/cert9.db" ]; then certutil -d sql:"$NSS_DIR" -N --empty-password 2>/dev/null || true; fi
+      certutil -d sql:"$NSS_DIR" -A -t "C,," -n "Utopia Homelab Root CA" -i "$CA_TARGET" 2>/dev/null || true
+      say "Utopia Root CA installed."
+    else
+      warn "Could not download Root CA."
+    fi
+    rm -f "$tmp_cert"
+    exit 0
+    ;;
+esac
 
 # ------------------------------------------------------------------------------
 say "Step 0: Update package lists & upgrade"
@@ -85,43 +149,29 @@ if ! dpkg -s ttf-mscorefonts-installer >/dev/null 2>&1; then
 fi
 
 # WineHQ
-# Self-cleaning: a prior or partial run may have left wine repo entries or keys
-# under several different paths. Remove ALL known variants so no stale key can
-# survive, then (re)add freshly.
-#
-# Step A: drop every known wine source + key path.
-sudo rm -f \
-  /etc/apt/sources.list.d/winehq.list \
-  /etc/apt/sources.list.d/winehq-*.list \
-  /etc/apt/sources.list.d/winehq-*.sources \
-  /etc/apt/keyrings/winehq.gpg \
-  /usr/share/keyrings/winehq-archive.gpg \
-  /usr/share/keyrings/winehq-archive.key \
-  /etc/apt/trusted.gpg.d/winehq.gpg \
-  /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
-# Drop the old WineHQ key from the legacy trusted keyring if a manual install put it there.
-if command -v apt-key >/dev/null 2>&1; then
-  sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
+if ! dpkg -s winehq-stable >/dev/null 2>&1 && ! dpkg -s wine >/dev/null 2>&1; then
+  say "Adding WineHQ repository..."
+  sudo dpkg --add-architecture i386 || true
+  sudo rm -f \
+    /etc/apt/sources.list.d/winehq.list \
+    /etc/apt/sources.list.d/winehq-*.list \
+    /etc/apt/sources.list.d/winehq-*.sources \
+    /etc/apt/keyrings/winehq.gpg \
+    /usr/share/keyrings/winehq-archive.gpg \
+    /usr/share/keyrings/winehq-archive.key \
+    /etc/apt/trusted.gpg.d/winehq.gpg \
+    /etc/apt/trusted.gpg.d/winehq-archive.gpg 2>/dev/null
+  if command -v apt-key >/dev/null 2>&1; then
+    sudo apt-key del "76F1A20FF987672F" 2>/dev/null || true
+  fi
+  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+  wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
+    | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
+  if sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/winehq.gpg --list-keys >/dev/null 2>&1; then
+    echo "deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
+      | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
+  fi
 fi
-sudo apt-get clean
-sudo rm -rf /var/lib/apt/lists/*
-sudo apt-get --allow-releaseinfo-change update 2>/dev/null || sudo apt update -y
-#
-# Step B: (re)add the WineHQ repo with a freshly dearmored key.
-sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-# winehq.key is ASCII-armored; apt needs a dearmored binary keyring for signed-by
-# (wget ships by default on Mint; curl may not be present yet at this step)
-wget -qO- https://dl.winehq.org/wine-builds/winehq.key \
-  | gpg --dearmor | sudo tee /etc/apt/keyrings/winehq.gpg >/dev/null
-# Guard: if the key didn't actually download, the keyring will be empty and apt
-# will complain - fail loudly rather than shipping a broken repo.
-if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/winehq.gpg --list-keys >/dev/null 2>&1; then
-  echo "ERROR: WineHQ key download failed / produced no key. Check network, then re-run."
-  exit 1
-fi
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ noble main" \
-  | sudo tee /etc/apt/sources.list.d/winehq.list >/dev/null
-say "WineHQ: cleared all stale wine state and re-added cleanly."
 
 # abraunegg OneDrive client (official OpenSuSE Build Service repo)
 # NOTE: the old launchpad PPA (ppa:abraunegg/onedrive) no longer exists - the
@@ -209,53 +259,48 @@ EOF
 }
 
 # OneDriveGUI (AppImage from GitHub releases)
-install_appimage "https://github.com/bpozdena/OneDriveGUI/releases/latest/download/OneDriveGUI-1.3.2-x86_64.AppImage" "OneDriveGUI"
+if [[ ! -f "$HOME/.local/bin/OneDriveGUI.AppImage" ]]; then
+  install_appimage "https://github.com/bpozdena/OneDriveGUI/releases/latest/download/OneDriveGUI-1.3.2-x86_64.AppImage" "OneDriveGUI"
+fi
 
 # ---- 4. Dropbox (official apt repo, so updates come via apt) -----------------
-say "Installing Dropbox..."
 # Add the official Dropbox apt repository (linux.dropbox.com) so it updates
 # along with everything else on 'sudo apt upgrade' - no flatpak needed.
-# NOTE: the old key URL (linux.dropbox.com/facts/keyring.gpg) returns 404 / "File
-# Not Found" now - fetch the Dropbox repo signing key from Ubuntu's keyserver
-# instead. Its fingerprint is 1C61A2656FB57B7E4DE0F4C1FC918B335044912E.
-fetch_dropbox_key() {
-  sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
-  # Always re-fetch (don't trust a possibly-stale file from a prior run).
-  curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC918B335044912E" \
-    | sudo gpg --dearmor -o /etc/apt/keyrings/dropbox.gpg
-  # Guard: ensure the key actually downloaded
-  if ! sudo gpg --no-default-keyring --keyring=/etc/apt/keyrings/dropbox.gpg --list-keys >/dev/null 2>&1; then
-    echo "ERROR: Dropbox key failed to download. Check network and re-run."
-    exit 1
-  fi
-}
-# Self-cleaning so a stale/broken key or repo entry from a prior run can't survive.
-sudo rm -f /etc/apt/sources.list.d/dropbox.list 2>/dev/null
-fetch_dropbox_key
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/dropbox.gpg] https://linux.dropbox.com/ubuntu noble main" \
-  | sudo tee /etc/apt/sources.list.d/dropbox.list >/dev/null
-sudo apt update -y
 if ! dpkg -s dropbox >/dev/null 2>&1; then
+  say "Installing Dropbox..."
+  fetch_dropbox_key() {
+    sudo mkdir -pm755 /etc/apt/keyrings 2>/dev/null || true
+    curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC918B335044912E" \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/dropbox.gpg
+  }
+  sudo rm -f /etc/apt/sources.list.d/dropbox.list 2>/dev/null
+  fetch_dropbox_key
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/dropbox.gpg] https://linux.dropbox.com/ubuntu noble main" \
+    | sudo tee /etc/apt/sources.list.d/dropbox.list >/dev/null
+  sudo apt update -y
   sudo apt install -y dropbox
 fi
 
 # ---- 5. Joplin (official installer handles desktop entry) -------------------
-say "Installing Joplin..."
-wget -qO- https://raw.githubusercontent.com/laurent22/joplin/dev/Joplin_install_and_update.sh | bash
+if [[ ! -f "$HOME/.joplin/Joplin.AppImage" ]] && ! command -v joplin >/dev/null 2>&1; then
+  say "Installing Joplin..."
+  wget -qO- https://raw.githubusercontent.com/laurent22/joplin/dev/Joplin_install_and_update.sh | bash
+fi
 
 # ---- 6. NetRunner ANSI BBS client (mysticbbs) -------------------------------
-say "Installing NetRunner..."
-# Ensure SDL2 runtime is installed (required for NetRunner's ANSI graphical/video engine)
-if ! dpkg -s libsdl2-2.0-0 >/dev/null 2>&1 && ! dpkg -s libsdl2-dev >/dev/null 2>&1; then
-  sudo apt install -y libsdl2-2.0-0 || sudo apt install -y libsdl2-dev || warn "Could not install SDL2 libraries for NetRunner"
-fi
-NETRUNNER_URL="https://mysticbbs.com/downloads/nr21_l64.zip"
-tmp="$(mktemp -d)"
-wget -q "$NETRUNNER_URL" -O "$tmp/nr.zip"
-unzip -q "$tmp/nr.zip" -d "$tmp"
-chmod +x "$tmp/netrunner"
-sudo install -Dm755 "$tmp/netrunner" /usr/local/bin/netrunner
-cat > "$HOME/.local/share/applications/netrunner.desktop" <<EOF
+if [[ ! -f "/usr/local/bin/netrunner" ]]; then
+  say "Installing NetRunner..."
+  # Ensure SDL2 runtime is installed (required for NetRunner's ANSI graphical/video engine)
+  if ! dpkg -s libsdl2-2.0-0 >/dev/null 2>&1 && ! dpkg -s libsdl2-dev >/dev/null 2>&1; then
+    sudo apt install -y libsdl2-2.0-0 || sudo apt install -y libsdl2-dev || warn "Could not install SDL2 libraries for NetRunner"
+  fi
+  NETRUNNER_URL="https://mysticbbs.com/downloads/nr21_l64.zip"
+  tmp="$(mktemp -d)"
+  wget -q "$NETRUNNER_URL" -O "$tmp/nr.zip"
+  unzip -q "$tmp/nr.zip" -d "$tmp"
+  chmod +x "$tmp/netrunner"
+  sudo install -Dm755 "$tmp/netrunner" /usr/local/bin/netrunner
+  cat > "$HOME/.local/share/applications/netrunner.desktop" <<EOF
 [Desktop Entry]
 Name=NetRunner
 Comment=ANSI BBS telnet/SSH client (mysticbbs)
@@ -264,8 +309,9 @@ Type=Application
 Terminal=false
 Categories=Network;
 EOF
-rm -rf "$tmp"
-update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
+  rm -rf "$tmp"
+  update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
+fi
 
 # ---- 7. MyBash from GitHub --------------------------------------------------
 # We just clone the repo here - no auto-hooking into .bashrc. You finish the
